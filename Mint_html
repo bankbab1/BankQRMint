@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KBank QR Generator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f7f7f7;
+    }
+    .container {
+      max-width: 400px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      text-align: center;
+      color: #2e7d32;
+    }
+    label {
+      font-size: 14px;
+      margin-top: 12px;
+      display: block;
+    }
+    input, select, button {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    input, select {
+      padding: 10px;
+      margin-top: 4px;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    button {
+      padding: 12px;
+      background-color: #2e7d32;
+      color: white;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #27652a;
+    }
+    .button-verify {
+  padding: 12px;
+  background-color: #03396c;
+  color: white;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+}
+
+.button-verify:hover {
+  background-color: #011f4b;
+}
+
+    #qrcode {
+      margin-top: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #payloadText {
+      word-break: break-all;
+      margin-top: 12px;
+      font-size: 12px;
+      color: #555;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>KBank QR Generator</h2>
+
+    <label for="receiver">Choose Receiver Bank Acc.</label>
+    <select id="receiver" onchange="updateAccount()">
+      <option value="Mew">Mew</option>
+      <!-- <option value="Few">Few</option> -->
+      <!-- <option value="Aon">Aon</option> -->
+    </select>
+
+    <label for="merchantId" style="display: none;">Merchant ID (15 digits)</label>
+    <input id="merchantId" type="text" inputmode="numeric" style="display: none;" value="004999194648787">
+
+    <label for="amount">Amount (optional)</label>
+    <input id="amount" type="text" placeholder="e.g. 123.45" inputmode="decimal">
+
+    <button onclick="generate()">Generate QR Code</button>
+
+    <div id="qrcode"></div>
+    <p id="payloadText"></p>
+    <label>Verify transaction:</label>
+    <button class="button-verify" onclick="openSCBApp()">Open SCB Easy App</button>
+  </div>
+
+  <script>
+    function updateAccount() {
+      const receiver = document.getElementById("receiver").value;
+      const merchantInput = document.getElementById("merchantId");
+
+      if (receiver === "Mew") {
+        merchantInput.value = "004999194648787";
+      }
+      // else if (receiver === "Few") {
+      //   merchantInput.value = "YOUR_ACCOUNT_ID_FEW";
+      // } else if (receiver === "Aon") {
+      //   merchantInput.value = "YOUR_ACCOUNT_ID_AON";
+      // }
+    }
+
+    const amountField = document.getElementById('amount');
+    amountField.addEventListener('input', function (e) {
+      let cursorPos = e.target.selectionStart;
+      let value = e.target.value.replace(/,/g, '');
+      if (!/^\d*\.?\d{0,2}$/.test(value)) {
+        value = value.slice(0, -1);
+      }
+      const parts = value.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      e.target.value = parts.join('.');
+      e.target.setSelectionRange(e.target.value.length, e.target.value.length);
+    });
+
+    function calculateCRC16(payload) {
+      let crc = 0xFFFF;
+      for (let i = 0; i < payload.length; i++) {
+        crc ^= payload.charCodeAt(i) << 8;
+        for (let j = 0; j < 8; j++) {
+          if ((crc & 0x8000) !== 0) {
+            crc = (crc << 1) ^ 0x1021;
+          } else {
+            crc = crc << 1;
+          }
+          crc &= 0xFFFF;
+        }
+      }
+      return crc.toString(16).toUpperCase().padStart(4, '0');
+    }
+
+    function generate() {
+      let accountId = document.getElementById('merchantId').value.replace(/\D/g, '');
+      if (accountId.length !== 15) {
+        alert("KBank merchant ID must be exactly 15 digits.");
+        return;
+      }
+
+      let amountInput = document.getElementById('amount').value.trim();
+      let amountValue = 0;
+      let amountStr = "";
+
+      if (amountInput) {
+        let cleaned = amountInput.replace(/,/g, '');
+        let parsed = parseFloat(cleaned);
+        if (isNaN(parsed)) {
+          alert("Invalid amount format.");
+          return;
+        }
+        amountValue = parsed;
+        amountStr = parsed.toFixed(2);
+      }
+
+      let payload = "000201";
+      payload += "010211";
+      payload += "2939";
+      payload += "0016A000000677010111";
+      payload += "0315" + accountId;
+      payload += "5303764";
+      payload += "5802TH";
+      if (amountValue > 0) {
+        payload += "54" + amountStr.length.toString().padStart(2, '0') + amountStr;
+      }
+      payload += "6304";
+
+      let crc = calculateCRC16(payload);
+      let fullPayload = payload + crc;
+
+      document.getElementById('qrcode').innerHTML = '';
+      new QRCode(document.getElementById('qrcode'), {
+        text: fullPayload,
+        width: 200,
+        height: 200
+      });
+      document.getElementById('payloadText').textContent = "Payload: " + fullPayload;
+    }
+    // Initialize account on load
+    updateAccount();
+     function openSCBApp() {window.location.href = "scbeasy://scan/camera";}
+  </script>
+
+
+
+</body>
+</html>
