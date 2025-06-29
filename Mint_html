@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>KBank QR Generator</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SCB PromptPay QR Generator</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     body {
@@ -22,18 +22,18 @@
     }
     h2 {
       text-align: center;
-      color: #2e7d32;
+      color: #4e2a84; /* SCB purple */
     }
     label {
       font-size: 14px;
       margin-top: 12px;
       display: block;
     }
-    input, select, button {
+    select, input, button {
       width: 100%;
       box-sizing: border-box;
     }
-    input, select {
+    select, input {
       padding: 10px;
       margin-top: 4px;
       margin-bottom: 12px;
@@ -43,7 +43,7 @@
     }
     button {
       padding: 12px;
-      background-color: #2e7d32;
+      background-color: #4e2a84;
       color: white;
       font-size: 16px;
       border: none;
@@ -51,25 +51,23 @@
       cursor: pointer;
     }
     button:hover {
-      background-color: #27652a;
+      background-color: #3a1f67;
     }
     .button-verify {
-  padding: 12px;
-  background-color: #03396c;
-  color: white;
-  font-size: 16px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 10px;
-}
-
-.button-verify:hover {
-  background-color: #011f4b;
-}
-
+      padding: 12px;
+      background-color: #03396c;
+      color: white;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 10px;
+    }
+    .button-verify:hover {
+      background-color: #011f4b;
+    }
     #qrcode {
       margin-top: 20px;
       display: flex;
@@ -87,47 +85,29 @@
 </head>
 <body>
   <div class="container">
-    <h2>KBank QR Generator</h2>
+    <h2>SCB PromptPay QR Generator</h2>
 
-    <label for="receiver">Choose Receiver Bank Acc.</label>
-    <select id="receiver" onchange="updateAccount()">
-      <option value="Mew">Mew</option>
-      <!-- <option value="Few">Few</option> -->
-      <!-- <option value="Aon">Aon</option> -->
+    <label for="receiver">Select Receiver</label>
+    <select id="receiver">
+      <option value="Mint" selected>Mint</option>
+      <option value="Bank">Bank</option>
     </select>
 
-    <label for="merchantId" style="display: none;">Merchant ID (15 digits)</label>
-    <input id="merchantId" type="text" inputmode="numeric" style="display: none;" value="004999194648787">
-
     <label for="amount">Amount (optional)</label>
-    <input id="amount" type="text" placeholder="e.g. 123.45" inputmode="decimal">
+    <input id="amount" type="number" step="0.01" placeholder="e.g. 123.45" inputmode="decimal" />
 
     <button onclick="generate()">Generate QR Code</button>
 
     <div id="qrcode"></div>
     <p id="payloadText"></p>
+
     <label>Verify transaction:</label>
     <button class="button-verify" onclick="openSCBApp()">Open SCB Easy App</button>
   </div>
 
   <script>
-    function updateAccount() {
-      const receiver = document.getElementById("receiver").value;
-      const merchantInput = document.getElementById("merchantId");
-
-      if (receiver === "Mew") {
-        merchantInput.value = "004999194648787";
-      }
-      // else if (receiver === "Few") {
-      //   merchantInput.value = "YOUR_ACCOUNT_ID_FEW";
-      // } else if (receiver === "Aon") {
-      //   merchantInput.value = "YOUR_ACCOUNT_ID_AON";
-      // }
-    }
-
     const amountField = document.getElementById('amount');
     amountField.addEventListener('input', function (e) {
-      let cursorPos = e.target.selectionStart;
       let value = e.target.value.replace(/,/g, '');
       if (!/^\d*\.?\d{0,2}$/.test(value)) {
         value = value.slice(0, -1);
@@ -135,7 +115,6 @@
       const parts = value.split('.');
       parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
       e.target.value = parts.join('.');
-      e.target.setSelectionRange(e.target.value.length, e.target.value.length);
     });
 
     function calculateCRC16(payload) {
@@ -155,14 +134,12 @@
     }
 
     function generate() {
-      let accountId = document.getElementById('merchantId').value.replace(/\D/g, '');
-      if (accountId.length !== 15) {
-        alert("KBank merchant ID must be exactly 15 digits.");
-        return;
-      }
+      const receiver = document.getElementById('receiver').value;
+
+      let phone = receiver === 'Mint' ? '0972316635' : '0859941717';
+      let refCode = "0066" + phone.substring(1);
 
       let amountInput = document.getElementById('amount').value.trim();
-      let amountValue = 0;
       let amountStr = "";
 
       if (amountInput) {
@@ -172,39 +149,30 @@
           alert("Invalid amount format.");
           return;
         }
-        amountValue = parsed;
         amountStr = parsed.toFixed(2);
       }
 
-      let payload = "000201";
-      payload += "010211";
-      payload += "2939";
-      payload += "0016A000000677010111";
-      payload += "0315" + accountId;
-      payload += "5303764";
-      payload += "5802TH";
-      if (amountValue > 0) {
-        payload += "54" + amountStr.length.toString().padStart(2, '0') + amountStr;
-      }
-      payload += "6304";
+      let rawText = "00020101021153037645802TH29370016A000000677010111";
+      rawText += "0113" + refCode; // Fixed: always phone number
 
-      let crc = calculateCRC16(payload);
-      let fullPayload = payload + crc;
+      if (amountStr) {
+        rawText += "54" + amountStr.length.toString().padStart(2, '0') + amountStr;
+      }
+
+      rawText += "6304" + calculateCRC16(rawText + "6304");
 
       document.getElementById('qrcode').innerHTML = '';
       new QRCode(document.getElementById('qrcode'), {
-        text: fullPayload,
+        text: rawText,
         width: 200,
         height: 200
       });
-      document.getElementById('payloadText').textContent = "Payload: " + fullPayload;
+      document.getElementById('payloadText').textContent = "Payload: " + rawText;
     }
-    // Initialize account on load
-    updateAccount();
-     function openSCBApp() {window.location.href = "scbeasy://scan/camera";}
+
+    function openSCBApp() {
+      window.location.href = "scbeasy://scan/camera";
+    }
   </script>
-
-
-
 </body>
 </html>
